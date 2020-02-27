@@ -34,10 +34,10 @@
 
 底层传输可以通过现有的多种协议实现:
 
-TCP
-Websocket
-HTTP
-UDP
+    TCP
+    Websocket
+    HTTP
+    UDP
 
 使用相同私钥的节点加入网络时，这些节点均为有效节点。使用 UDP 协议时，节点收到的消息可能来自不同IP的有效节点。
 
@@ -45,11 +45,11 @@ UDP
 
 使用 OSI 网络7层协议作为类比:
 
-L7 (应用层): High-level RPC API
-L6 (表示层): 
-L5 (会话层): ATTNProto session
-L4 (传输层): ATTN protocol
-L3 (网络层): IP
-L2 (数据链路层): MAC/LLC
-L1 (物理层): IEEE 802.3, IEEE 802.11, etc…
+    L7 (应用层): High-level RPC API
+    L6 (表示层): 
+    L5 (会话层): ATTNProto session
+    L4 (传输层): ATTN protocol
+    L3 (网络层): IP
+    L2 (数据链路层): MAC/LLC
+    L1 (物理层): IEEE 802.3, IEEE 802.11, etc…
 
