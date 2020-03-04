@@ -2,90 +2,107 @@
 
 Sequence Language（以下简称SL），旨在提供一种轻便高效的结构化数据存储格式。SL与平台无关，可应用于通信、数据存储等领域。
 
+## 编码方式
 
-> 编码方式（TV-LC）
+编码最小单位为字节，所有数据均按照以下方式编码 
 
-在双方达成一致的情况下，信息中的值名称是冗余的。编码首先用一个VarInt（[Variable-length quantity](https://en.wikipedia.org/wiki/Variable-length_quantity)，以下简称VarInt）代表值的个数（**T**otal count），随后是每个值（**V**alue）。每个值由两部分组成：长度（**L**ength） + 内容（**C**ontent）。长度L采用VarInt来表示；内容C均由值序列化为二进制编码。编码的最小单位为字节。
+| 名称 | 编码方式 | 描述 |
+| ---- | ---- | ---- |
+| **L**ength  | VarInt | 二进制数据长度，采用可变长编码：[Variable-length quantity](https://en.wikipedia.org/wiki/Variable-length_quantity) |
+| **V**alue  | Byte Array | 二进制数据 |
 
-原始消息：
+> 数据类型
 
-    Message {
-      int     id = 1;       // Value_1
-      string msg = "hello"; // Value_2
+| 类型 | 描述 | 示例值 | 示例编码
+|  ---- | ---- | ---- | ---- |
+| raw | 二进制数据 | | |
+| number | 有符号整数类型（[Big-endian](https://en.wikipedia.org/wiki/Endianness#Big-endian)）<br>第一bit为符号位。如果正数的第一bit是1，则在最左补一个空白字节 | 128<br>-128 | 0x0080<br>0x80 |
+| decimal | 有符号有理数：a * 10^b，len + a + b<br>len 采用VarInt编码 a、b按照 number 类型进行编码<br> len 表示 a 的数据长度，b 的数据长度可以由 decimal 总长度减去 len 算出 | | |
+| string | 将二进制数据作为字符串解析，默认采用 [UTF-8](https://en.wikipedia.org/wiki/UTF-8) 编码  | | |
+| array | 数组，由一种特定类型组成，元素个数可变 | | |
+| object | 对象，可以由多种类型组成。每个对象的结构由其描述文件表示 | | |
+
+
+## 描述文件
+
+值严格按照描述文件约定的顺序进行排列。
+描述文件采用json格式，对特定SL编码的数据类型及结构进行描述。
+
+> 一个用户信息数据结构示例：
+
+    {
+      "type"  : "object",
+      // object 用 field 字段记录各个值的类型
+      "field" : {
+        "id"          : { "type":"number"  },
+        "first_name"  : { "type":"string"  },
+        "last_name"   : { "type":"string"  },
+        "score"       : { "type":"decimal" },
+        "phone"       : { "type":"string"  },
+        "contacts" : { 
+          "type" : "array",
+          // array 类型用 element 字段记录元素类型
+          "element" : {
+            "type"  : "object",
+            "field" : {
+              "id"     : { "type":"number" },
+              "remark" : { "type":"string" }
+            }
+          }
+        }
+      }
     }
 
-一个包含两个值的SL示例：
+> 演示如何将具体的消息内容转换为字节码
 
-    T  V1[L1-C1]          V2[L2-C2]       
-    02    04 00000001     05 68656c6c6f
-    
-值的长度L可以为0，表示这个值为空（Null）；值应当严格按照描述文件约定的顺序进行排列。
+原始消息内容：
 
-> 描述文件
+    {
+      "id"         : 11099822739479112,
+      "first_name" : "John",
+      "last_name"  : "Smith",
+      "score"      : 128.32,
+      "phone"      : "400-222-5555",
+      "contacts"   : [
+        { "id" : 39817873987985719, "remark" : "boss" },
+        { "id" : 45405687374639045 }
+      ]
+    }
 
-描述文件采用json格式，对特定SL编码的字段含义、值类型进行描述。
+根据数据结构规范转换为字节码：
 
-字段含义
+    00        05        10        15        20        25        30        35        40        45        50        55        60      64 < index
+    4007276f3adf74da48044a6f686e05536d69746804023220020c3430302d3232322d353535351a0e08008d76253ac3e13704626f73730a0800a1503b6abf6fc500 < bytes
+    40|message                                                                                                                       | < details
+      07|id          |04|firs..|05|last_n..|04|score |0c|phone                 |1a|contacts                    |  |                  |
+        276f3adf74da48  4a6f686e  536d697468  02|a | |  3430302d3232322d35353535  0e|contact-0                 |0a|contact-1         |
+                                                3220 b                              08|id             04|remark|  08|id            |00
+                                                    02                                008d76253ac3e137  626f7373    00a1503b6abf6fc5
 
-| 名 | 值 | 是否必须 |
-|  ---- | ---- | ---- |
-| name  | 名称 | Y |
-| type  | 类型 | Y |
-| desc  | 描述 | N |
+字节码解析：
 
-示例：
-
-    [
-        {
-            "name":"id",
-            "type":"number",
-            "desc":"int"
-        },
-        {
-            "name":"msg",
-            "type":"string"
-        }
-    ]
-
-嵌套类型
-    
-    [
-        {
-            "name":"id",
-            "type":"number"
-        },
-        {
-            "name":"msg",
-            "type":[
-                {
-                    "name":"msg_id",
-                    "type":"number"
-                },
-                {
-                    "name":"msg_content",
-                    "type":"string"
-                }
-            ]
-        }
-    ]
-
-复杂类型的子类型编码也应遵循 TV-LC 规范
-
-> 各种类型的详细编码规范
-
-| 类型 | 描述 |
-|  ---- | ---- |
-| raw | 二进制数据 |
-| number | 有符号整数类型（[Big-endian](https://en.wikipedia.org/wiki/Endianness#Big-endian)），根据值长度L来确定具体是何种类型(如L=4字节代表int类型) |
-| decimal | 有符号有理数，用一个VarInt来表示指数位，其余部分表示尾数（Big-endian） |
-| string | 默认采用 [UTF-8](https://en.wikipedia.org/wiki/UTF-8) 编码的字符串 |
-
-
-> decimal 类型编码规范说明
-
-
-
-
-
-
-
+| 字节码 | 描述 | 值 |
+| ---- | ---- | ---- |
+| 40 | 数据总长度 | 65 |
+| 07 | id 数据长度 | 7 |
+| 276f3adf74da48 | id | 11099822739479112 |
+| 04 | first_name 数据长度 | 4 |
+| 4a6f686e | first_name | John |
+| 05 | last_name 数据长度 | 5 |
+| 536d697468 | last_name | Smith |
+| 04 | score 数据长度 | 5 |
+| 02 | score a长度 | 2 |
+| 3220 | score a值 | 12832 |
+| 02 | score b值（128.32 = 12832 * 10^-2） | 2 |
+| 0c | phone 数据长度 | 12 |
+| 3430302d3232322d35353535 | phone | 400-222-5555 |
+| 1a | contacts 数据长度 | 26 |
+| 0e | contact-0 数据长度 | 14 |
+| 08 | contact-0 id 数据长度 | 8 |
+| 008d76253ac3e137 | contact-0 id | 39817873987985719 |
+| 04 | contact-0 remark 数据长度 | 4 |
+| 626f7373 | contact-0 remark | boss |
+| 0a | contact-1 数据长度 | 10 |
+| 08 | contact-1 id 数据长度 | 8 |
+| 00a1503b6abf6fc5 | contact-1 id | 45405687374639045 |
+| 00 | contact-0 remark 数据长度（长度为零代表此值为null）| 0 |
