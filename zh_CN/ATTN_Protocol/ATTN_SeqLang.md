@@ -17,11 +17,11 @@ Sequence Language（以下简称SL），旨在提供一种轻便高效的结构�
 |  ---- | ---- | ---- | ---- | ---- |
 | raw | 二进制数据 | { "type":"raw" } | | |
 | number | 有符号整数类型（[Big-endian](https://en.wikipedia.org/wiki/Endianness#Big-endian)）<br>第一bit为符号位。如果正数的第一bit是1，则在最左补一个空白字节 | { "type":"number" } | 128<br>-128 | 0x0080<br>0x80 |
-| decimal | 有符号有理数：a * 10^b，len + a + b<br>len 采用VarInt编码 a、b按照 number 类型进行编码<br> len 表示 a 的数据长度，b 的数据长度可以由 decimal 总长度减去 len 算出 | { "type":"decimal" } | | |
+| decimal | 有符号有理数：a * 10^b，len + a + b<br>len 采用VarInt编码 a、b按照 number 类型进行编码<br> len 表示 a 的数据长度，b 的数据长度可以由 decimal 总长度减去 len 算出<br> 如果小数位数为0，则b字段省略| { "type":"decimal" } | 15.75 | 0402062702 |
 | string | 将二进制数据作为字符串解析，默认采用 [UTF-8](https://en.wikipedia.org/wiki/UTF-8) 编码 |  { "type":"string" } | | |
 | array | 数组，由一种特定类型组成，元素个数可变 | {<br>　"type":"array",<br>　"element" : { "type" : ??? }<br>} | | |
 | dict | key-value 数据结构<br>key只支持string、number类型<br>value 可以为任意特定类型 | {<br>　"type":"dict",<br>　"key" : { "type" : "string" } <br>　"value" : { "type" : ??? }<br>} | | |
-| object | 对象，可以由多种类型组成。每个对象的结构由其描述文件表示 | {<br>　"type":"object",<br>　"fields" : {<br>　　"field0" : { "type" : ??? },<br>　　"field1" : { "type" : ??? }<br>　}<br>} | | |
+| object | 对象，可以由多种类型组成。每个对象的结构由其描述文件表示 | {<br>　"type":"object",<br>　"fields" : [<br>　　{ "type" : ???, "desc" : "field0" },<br>　　{ "type" : ???, "desc" : "field1" }<br>　}<br>} | | |
 
 
 ## 描述文件
@@ -34,24 +34,26 @@ Sequence Language（以下简称SL），旨在提供一种轻便高效的结构�
     {
       "type"  : "object",
       // object 用 fields 字段记录各个值的类型
-      "fields" : {
-        "id"          : { "type":"number"  },
-        "first_name"  : { "type":"string"  },
-        "last_name"   : { "type":"string"  },
-        "score"       : { "type":"decimal" },
-        "phone"       : { "type":"string"  },
+      "fields" : [
+        //  type 字段为数据类型
+        //  desc 字段为字段含义说明，对数据序列化没有实际影响
+        { "type":"number",  "desc":"id" },
+        { "type":"string",  "desc":"first_name" },
+        { "type":"string",  "desc":"last_name" },
+        { "type":"decimal", "desc":"score" },
+        { "type":"string",  "desc":"phone" },
         "contacts" : { 
           "type" : "array",
           // array 类型用 element 字段记录元素类型
           "element" : {
             "type"  : "object",
-            "fields" : {
-              "id"     : { "type":"number" },
-              "remark" : { "type":"string" }
-            }
+            "fields" : [
+                { "type":"number",  "desc":"id" },
+                { "type":"string",  "desc":"remark" },
+            ]
           }
         }
-      }
+      ]
     }
 
 > 演示如何将具体的消息内容转换为字节码
